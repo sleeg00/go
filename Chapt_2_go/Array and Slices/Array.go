@@ -3,8 +3,8 @@ package main
 import "fmt"
 
 func main() {
-	names := []string{"nico", "lyn", "dal"}
+	slice1 := make([]int, 3)
+	slice1=append(slice1,4)
 
-	names = append(names, "flynn")
-	fmt.Println(names[2])
+	fmt.Println(slice1)
 }
