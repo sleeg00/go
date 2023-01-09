@@ -5,6 +5,6 @@ import "fmt"
 func main() {
 	//var name string = "nico"
 	//name ="lynn"
-	name := "nico"
+	name := "sleeg"
 	fmt.Print(name)
 }
