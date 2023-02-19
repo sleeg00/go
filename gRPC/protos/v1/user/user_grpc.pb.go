@@ -18,10 +18,10 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
-// UserClient is the client API for User service.
+// UserClient is the client API for User service. 사용자 서비르르 위한 클라이언트 API
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type UserClient interface {
+type UserClient interface {	//에러 관련
 	GetUser(ctx context.Context, in *GetUserRequest, opts ...grpc.CallOption) (*GetUserResponse, error)
 	ListUsers(ctx context.Context, in *ListUsersRequest, opts ...grpc.CallOption) (*ListUsersResponse, error)
 }
@@ -53,15 +53,15 @@ func (c *userClient) ListUsers(ctx context.Context, in *ListUsersRequest, opts .
 }
 
 // UserServer is the server API for User service.
-// All implementations must embed UnimplementedUserServer
-// for forward compatibility
+// 모든 구현은 UnimplementedUserServer를 포함해야 합니다.
+// 순방향 호환성을 위해
 type UserServer interface {
 	GetUser(context.Context, *GetUserRequest) (*GetUserResponse, error)
 	ListUsers(context.Context, *ListUsersRequest) (*ListUsersResponse, error)
 	mustEmbedUnimplementedUserServer()
 }
 
-// UnimplementedUserServer must be embedded to have forward compatible implementations.
+// UnimplementedUserServer는 포워드 호환 구현을 포함해야 합니다.
 type UnimplementedUserServer struct {
 }
 
@@ -73,9 +73,9 @@ func (UnimplementedUserServer) ListUsers(context.Context, *ListUsersRequest) (*L
 }
 func (UnimplementedUserServer) mustEmbedUnimplementedUserServer() {}
 
-// UnsafeUserServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to UserServer will
-// result in compilation errors.
+// UnsafeUserServer는 이 서비스에 대한 향후 호환성을 옵트아웃하기 위해 내장될 수 있습니다.
+// UserServer에 추가된 메서드는 이 인터페이스를 사용하지 않는 것이 좋습니다.
+// 컴파일 오류가 발생합니다.
 type UnsafeUserServer interface {
 	mustEmbedUnimplementedUserServer()
 }
@@ -120,9 +120,9 @@ func _User_ListUsers_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
-// User_ServiceDesc is the grpc.ServiceDesc for User service.
-// It's only intended for direct use with grpc.RegisterService,
-// and not to be introspected or modified (even as a copy)
+//  User_ServiceDesc는 사용자 서비스의 grpc.ServiceDesc입니다.
+// grpc.RegisterService와 함께 직접 사용하기 위한 것입니다.
+// 검토하거나 수정할 수 없습니다(복사본인 경우에도).
 var User_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "v1.user.User",
 	HandlerType: (*UserServer)(nil),

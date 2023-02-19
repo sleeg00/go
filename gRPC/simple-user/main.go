@@ -22,7 +22,7 @@ func (s *userServer) GetUser(ctx context.Context, req *userpb.GetUserRequest) (*
 	userID := req.UserId
 
 	var userMessage *userpb.UserMessage
-	for _, u := range data.Users {
+	for _, u := range data.UserData {
 		if u.UserId != userID {
 			continue
 		}
@@ -37,8 +37,8 @@ func (s *userServer) GetUser(ctx context.Context, req *userpb.GetUserRequest) (*
 
 // ListUsers returns all user messages
 func (s *userServer) ListUsers(ctx context.Context, req *userpb.ListUsersRequest) (*userpb.ListUsersResponse, error) {
-	userMessages := make([]*userpb.UserMessage, len(data.Users))
-	for i, u := range data.Users {
+	userMessages := make([]*userpb.UserMessage, len(data.UserData))
+	for i, u := range data.UserData {
 		userMessages[i] = u
 	}
 
