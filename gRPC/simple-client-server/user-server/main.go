@@ -24,7 +24,7 @@ func (s *userServer) GetUser(ctx context.Context, req *userpb.GetUserRequest) (*
 	userID := req.UserId
 
 	var userMessage *userpb.UserMessage
-	for _, u := range data.UserData {
+	for _, u := range data.Users {
 		if u.UserId != userID {
 			continue
 		}
@@ -40,8 +40,8 @@ func (s *userServer) GetUser(ctx context.Context, req *userpb.GetUserRequest) (*
 // ListUsers returns all user messages
 // rpc와 유저들의 정보 모두를 갖고오는 ListUsers
 func (s *userServer) ListUsers(ctx context.Context, req *userpb.ListUsersRequest) (*userpb.ListUsersResponse, error) {
-	userMessages := make([]*userpb.UserMessage, len(data.UserData))
-	for i, u := range data.UserData {
+	userMessages := make([]*userpb.UserMessage, len(data.Users))
+	for i, u := range data.Users {
 		userMessages[i] = u
 	}
 

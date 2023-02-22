@@ -19,7 +19,7 @@ const portNumber = "9001"
 type postServer struct {
 	postpb.PostServer
 
-	userCli userpb.UserClient
+	userCli userpb.UserClient //user 서비스 이용 가능하도록 설정
 }
 
 // ListPostsByUserId returns post messages by user_id
@@ -27,18 +27,21 @@ func (s *postServer) ListPostsByUserId(ctx context.Context, req *postpb.ListPost
 	userID := req.UserId
 
 	resp, err := s.userCli.GetUser(ctx, &userpb.GetUserRequest{UserId: userID})
+
+	//user gRPC server의 GetUSer rpc 호출
 	if err != nil {
 		return nil, err
 	}
 
 	var postMessages []*postpb.PostMessage
+
 	for _, up := range data.UserPosts {
 		if up.UserID != userID {
 			continue
 		}
 
 		for _, p := range up.Posts {
-			p.Author = resp.UserMessage.Name
+			p.Author = resp.UserMessage.Name //id에 담긴 이름
 		}
 
 		postMessages = up.Posts
@@ -72,13 +75,17 @@ func (s *postServer) ListPosts(ctx context.Context, req *postpb.ListPostsRequest
 }
 
 func main() {
-	lis, err := net.Listen("tcp", ":"+portNumber)
+
+	lis, err := net.Listen("tcp", ":"+portNumber) //9001번 포트로 연결 대기
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	userCli := client.GetUserClient("localhost:9000")
-	grpcServer := grpc.NewServer()
+	userCli := client.GetUserClient("localhost:9000") //User gRPC 서버와 연결을 맺는 userCli 선언\
+
+	//grpc패키지로 보안을 거친 후 이제 통신이 가능함
+	grpcServer := grpc.NewServer() //서버 생성 9001포트로~
+
 	postpb.RegisterPostServer(grpcServer, &postServer{
 		userCli: userCli,
 	})
