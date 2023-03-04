@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package log.v1; //패키지 이름 설정
+
+option go_package = "githib.com/sleeg00/api/log_v1";
+
+message Record {
+    bytes value = 1;    //오른쪽은 ID
+    uint64 offset = 2;
+    //repeated Record records = records []Record랑 같다
+}
