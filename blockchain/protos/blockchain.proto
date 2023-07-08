@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+option go_package = "blockchain/protos"; //패키지 사용 PATH 설정
+
+message TransactionRequest {
+  string data = 1; //Request value로는 데이터를 하나 받을 것이다
+}
+
+message AddTransactionResponse {
+  string message = 1; //Response value로는 String을 줄 것이다.
+}
+
+message ValidateChainRequest {} //Request는 없다 
+
+message ValidateChainResponse {
+  bool is_valid = 1; //Response value로는 true, false를 줄 것이다
+}
+
+service BlockChain {
+  rpc AddTransaction(TransactionRequest) returns (AddTransactionResponse) {} 
+ // TransactionRequest로 요청을 받는다
+
+  rpc ValidateChain(ValidateChainRequest) returns (ValidateChainResponse) {}
+  //ValidateChainRequest로 요청을 받는다
+}
+
