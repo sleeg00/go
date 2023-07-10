@@ -7,16 +7,16 @@ type Blockchain struct {
 }
 
 func (bc *Blockchain) AddBlock(data string) {
-	prevBlock := bc.blocks[len(bc.blocks)-1]
-	newBlock := NewBlock(data, prevBlock.Hash)
-	bc.blocks = append(bc.blocks, newBlock)
+	prevBlock := bc.blocks[len(bc.blocks)-1]   //이전 블록 변수에 추가
+	newBlock := NewBlock(data, prevBlock.Hash) //새로운 블록 추가
+	bc.blocks = append(bc.blocks, newBlock)    //Blocks에 추가
 }
 
 func NewGenesisBlock() *Block {
-	return NewBlock("Genesis Block", []byte{})
+	return NewBlock("Genesis Block", []byte{}) //첫 블록
 }
 
-func NewBlockchain() *Blockchain {
+func NewBlockchain() *Blockchain { //첫 블록체인
 	return &Blockchain{[]*Block{NewGenesisBlock()}}
 }
 
