@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"fmt"
+	"math"
 	"math/big"
 )
 
@@ -25,39 +26,66 @@ func NewProofOfWork(b *Block) *ProofOfWork {
 }
 
 func (pow *ProofOfWork) prepareData(nonce int) []byte {
-	data := bytes.Join( //바이트 배열을 하나로 결합
+	data := bytes.Join(
 		[][]byte{
-			pow.block.PrevBlockHash,       //현재 블록 이전 Hash Value
-			pow.block.Data,                //Block Data
-			IntToHex(pow.block.Timestamp), //TimeStamp of Binary
-			IntToHex(int64(targetBits)),   // targetBits of Binary
-			IntToHex(int64(nonce)),        // nonce of Binary
+			pow.block.PrevBlockHash,
+			pow.block.HashTransactions(), // 수정된 부분 메시지가 트랜잭션이 된 것일뿐 블록의 => 트랜잭션을 Hash화해서 더함
+			IntToHex(pow.block.Timestamp),
+			IntToHex(int64(targetBits)),
+			IntToHex(int64(nonce)),
 		},
 		[]byte{},
 	)
+
 	return data
 }
+func (b *Block) HashTransactions() []byte {
+	var txHashes [][]byte
+	var txHash [32]byte
 
+	for _, tx := range b.Transactions { //나중에 for문 제거해보기
+		txHashes = append(txHashes, tx.ID)
+	}
+	txHash = sha256.Sum256(bytes.Join(txHashes, []byte{}))
+	return txHash[:]
+}
+
+// Run performs a proof-of-work
 func (pow *ProofOfWork) Run() (int, []byte) {
 	var hashInt big.Int
 	var hash [32]byte
 	nonce := 0
 
-	fmt.Printf("Mining the block containing \"%s\"\n", pow.block.Data)
-
+	fmt.Printf("Mining a new block")
 	for nonce < maxNonce {
-		data := pow.prepareData(nonce) //데이터를 준비함 nonce를 이용해서 엄청 긴 데이터를
-		hash = sha256.Sum256(data)     //hash값 계산
-		fmt.Printf("\r%x", hash)       //찍고
+		data := pow.prepareData(nonce)
 
-		hashInt.SetBytes(hash[:])          //hash값을 hashInt에 저장
-		if hashInt.Cmp(pow.target) == -1 { //해시 값이 목표값 보다 작으면 break!
+		hash = sha256.Sum256(data)
+		if math.Remainder(float64(nonce), 100000) == 0 {
+			fmt.Printf("\r%x", hash)
+		}
+		hashInt.SetBytes(hash[:])
+
+		if hashInt.Cmp(pow.target) == -1 {
 			break
-		} else { //아니면 nonce를 더해서 더 찾기
+		} else {
 			nonce++
 		}
 	}
 	fmt.Print("\n\n")
 
-	return nonce, hash[:] //nonce와 hash return
+	return nonce, hash[:]
+}
+
+// Validate validates block's PoW
+func (pow *ProofOfWork) Validate() bool { //Nonce를 통한 검증
+	var hashInt big.Int
+
+	data := pow.prepareData(pow.block.Nonce)
+	hash := sha256.Sum256(data)
+	hashInt.SetBytes(hash[:])
+
+	isValid := hashInt.Cmp(pow.target) == -1
+
+	return isValid
 }
