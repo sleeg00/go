@@ -1,121 +1,3 @@
-/*
-package main
-
-import (
-
-	"bytes"
-	"encoding/hex"
-	"errors"
-	"fmt"
-	"log"
-	"os"
-
-	"github.com/boltdb/bolt"
-
-)
-
-const dbFile = "blockchain_%s.db"
-const blocksBucket = "blocks"
-const genesisCoinbaseData = "The Times 03/Jan/2009 Chancellor on brink of second bailout for banks"
-
-	type Blockchain struct {
-		tip []byte
-		db  *bolt.DB
-	}
-
-// AddBlock saves the block into the blockchain
-/*
-
-	func (bc *Blockchain) AddBlock(block *Block) {
-		err := bc.db.Update(func(tx *bolt.Tx) error {
-			b := tx.Bucket([]byte(blocksBucket)) //버킷 가져옴
-			blockInDb := b.Get(block.Hash)       //블록의 해시값
-
-			if blockInDb != nil {
-				return nil
-			}
-
-			blockData := block.Serialize()      //직렬화 디코딩
-			err := b.Put(block.Hash, blockData) //해시값 넣기
-			if err != nil {
-				log.Panic(err)
-			}
-
-			lastHash := b.Get([]byte("l"))               //마지막 블럭 해시 가져오기
-			lastBlockData := b.Get(lastHash)             //블록 데이터 가져오기
-			lastBlock := DeserializeBlock(lastBlockData) //역직렬화를 통해 가져오기
-
-			if block.Height > lastBlock.Height {
-				err = b.Put([]byte("l"), block.Hash)
-				if err != nil {
-					log.Panic(err)
-				}
-				bc.tip = block.Hash
-			}
-
-			return nil
-		})
-		if err != nil {
-			log.Panic(err)
-		}
-	}
-
-func dbExists(dbFile string) bool { //DB열려있는지 확인
-
-		if _, err := os.Stat(dbFile); os.IsNotExist(err) {
-			return false
-		}
-
-		return true
-	}
-
-// 새로운 블록체인과 DB를 생성한다.
-func CreateBlockchain(address, nodeID string) *Blockchain { //주소와 노드ID를 받는다
-
-		dbFile := fmt.Sprintf(dbFile, nodeID)
-		if dbExists(dbFile) { //예외처리
-			fmt.Println("Blockchain already exists.")
-			os.Exit(1)
-		}
-
-		var tip []byte
-
-		cbtx := NewCoinbaseTX(address, genesisCoinbaseData) //주소, 처음의 데이터 input 0, output 0 생성
-		genesis := NewGenesisBlock(cbtx)                    //새로운 GenesisBlock 생성
-
-		db, err := bolt.Open(dbFile, 0600, nil) //DB Open
-		if err != nil {
-			log.Panic(err)
-		}
-
-		err = db.Update(func(tx *bolt.Tx) error {
-			b, err := tx.CreateBucket([]byte(blocksBucket)) //버킷 생성 스키마?
-			if err != nil {
-				log.Panic(err)
-			}
-
-			err = b.Put(genesis.Hash, genesis.Serialize()) //처음 생성된 Genesis Hash 넣기 인코딩해서
-			if err != nil {
-				log.Panic(err)
-			}
-
-			err = b.Put([]byte("l"), genesis.Hash) //l값에 해시 넣기  (마지막 블럭이라는 뜻)
-			if err != nil {
-				log.Panic(err)
-			}
-			tip = genesis.Hash //tip = hash값
-
-			return nil
-		})
-		if err != nil {
-			log.Panic(err)
-		}
-
-		bc := Blockchain{tip, db} //마지막 Hash값 , db계속 연결
-
-		return &bc
-	}
-*/
 package main
 
 import (
@@ -181,7 +63,7 @@ func (bc *Blockchain) MineBlock(transactions []*Transaction) {
 	})
 }
 
-func (bc *Blockchain) FindUnspentTransactions(address string) []Transaction {
+func (bc *Blockchain) FindUnspentTransactions(pubKeyHash []byte) []Transaction { //pubKeyHash가 지금 address로 쓰임 Output의 누군가에게?
 	var unspentTXs []Transaction
 	spentTXOs := make(map[string][]int)
 	bci := bc.Iterator()
@@ -203,14 +85,14 @@ func (bc *Blockchain) FindUnspentTransactions(address string) []Transaction {
 					}
 				}
 
-				if out.CanBeUnlockedWith(address) { //키가 있냐(지금은 사용자 주소로만 한다)?
-					unspentTXs = append(unspentTXs, *tx) //TX~~에 남은 돈이 있어요 -> UTXO가 있어요 알려준다
+				if out.IsLockedWithKey(pubKeyHash) {
+					unspentTXs = append(unspentTXs, *tx)
 				}
 			}
 
 			if tx.IsCoinbase() == false { //Genesis Block이면
 				for _, in := range tx.Vin {
-					if in.CanUnlockOutputWith(address) {
+					if in.UsesKey(pubKeyHash) {
 						inTxID := hex.EncodeToString(in.Txid)
 						spentTXOs[inTxID] = append(spentTXOs[inTxID], in.Vout)
 					}
@@ -227,13 +109,13 @@ func (bc *Blockchain) FindUnspentTransactions(address string) []Transaction {
 }
 
 // FindUTXO finds and returns all unspent transaction outputs
-func (bc *Blockchain) FindUTXO(address string) []TXOutput {
+func (bc *Blockchain) FindUTXO(pubKeyHash []byte) []TXOutput {
 	var UTXOs []TXOutput
-	unspentTransactions := bc.FindUnspentTransactions(address)
+	unspentTransactions := bc.FindUnspentTransactions(pubKeyHash)
 
 	for _, tx := range unspentTransactions {
 		for _, out := range tx.Vout {
-			if out.CanBeUnlockedWith(address) {
+			if out.IsLockedWithKey(pubKeyHash) {
 				UTXOs = append(UTXOs, out)
 			}
 		}
@@ -244,10 +126,10 @@ func (bc *Blockchain) FindUTXO(address string) []TXOutput {
 
 // 사용가능한 잔액, 즉 UTXO를 찾자
 // 사용할 UTXO값과 UTXO덩어리들(Output_Idx)를 반환한다.
-func (bc *Blockchain) FindSpendableOutputs(address string, amount int) (int, map[string][]int) {
+func (bc *Blockchain) FindSpendableOutputs(pubKeyHash []byte, amount int) (int, map[string][]int) {
 	//만약 Ivan에게 0
-	unspentOutputs := make(map[string][]int)          //UTXO
-	unspentTXs := bc.FindUnspentTransactions(address) //address에 그러니까 A가 B에게 돈을 보낼 때 A의 UTXO가 남아있는지 조사해서 TX를 넘김
+	unspentOutputs := make(map[string][]int)             //UTXO
+	unspentTXs := bc.FindUnspentTransactions(pubKeyHash) //address에 그러니까 A가 B에게 돈을 보낼 때 A의 UTXO가 남아있는지 조사해서 TX를 넘김
 	accumulated := 0
 
 Work:
@@ -255,7 +137,7 @@ Work:
 		txID := hex.EncodeToString(tx.ID) //인코딩한다
 
 		for outIdx, out := range tx.Vout {
-			if out.CanBeUnlockedWith(address) && accumulated < amount {
+			if out.IsLockedWithKey(pubKeyHash) && accumulated < amount {
 				accumulated += out.Value                                    //UTXO를 더한다 A->B에게 보낼보다 크다면 멈춘다
 				unspentOutputs[txID] = append(unspentOutputs[txID], outIdx) //UTXO[TXID] = Output의 Idx를 저장한다.
 				//해당 UTXO의 덩어리들을 append! 왜냐하면 UTXO덩어리를 두 개 쓸 수 도 있기 때문이다.

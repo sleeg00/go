@@ -185,11 +185,20 @@ func NewCoinbaseTX(to, data string) *Transaction {
 }
 
 // Input, Output , TX기록 TX반납
+// + part 5 서명까지한 TX를 반납한다~
 func NewUTXOTransaction(from, to string, amount int, bc *Blockchain) *Transaction {
 	var inputs []TXInput
 	var outputs []TXOutput
+	wallets, err := NewWallets() //지갑들 생성
+	if err != nil {
+		log.Panic(err)
+	}
+	wallet := wallets.GetWallet(from)          //주소의 지갑을 가져온다
+	pubKeyHash := HashPubKey(wallet.PublicKey) //공개 키 가져온다 (주소라도 봐도 무방 )
 
-	acc, validOutputs := bc.FindSpendableOutputs(from, amount) //사용할 UTXO값, UTXO덩어리들의 Idx가 왔다(Output_Idx)
+	acc, validOutputs := bc.FindSpendableOutputs(pubKeyHash, amount) //공개키의 UTXO를 가져온다 => 주소의 UTXO를 가져온다.
+	//사용할 UTXO값, UTXO덩어리들의 Idx가 왔다(Output_Idx)
+	//반환값은 사용할 acc UTXO값과 사용할 validOutputs={1, 3, 5} 1, 3, 5 UTXO덩어리들의 Idx즉 인덱스다(Outputs의)
 
 	if acc < amount { //돈이 충분치 않을 경우 error
 		log.Panic("ERROR: Not enough funds")
@@ -203,19 +212,19 @@ func NewUTXOTransaction(from, to string, amount int, bc *Blockchain) *Transactio
 		}
 
 		for _, out := range outs { //Output_IDX => UTXO의 IDX
-			input := TXInput{txID, out, from} //Input구조체에 기록한다 (어떤 TXID에게 받았고, 얼마를, 누구에게 받았는지)
-			inputs = append(inputs, input)    //배열에 저장
+			input := TXInput{txID, out, nil, wallet.PublicKey} //Input구조체에 기록한다 (어떤 TXID에게 받았고, 얼마를, 누구에게 받았는지)
+			inputs = append(inputs, input)                     //배열에 저장
 		}
 	}
 
 	// Build a list of outputs
-	outputs = append(outputs, TXOutput{amount, to}) //기록한다 얼마를 누구한테 줌
-	if acc > amount {                               //거스름돈을 챙기자
-		outputs = append(outputs, TXOutput{acc - amount, from}) //나한테 뺀 가격만큼 거스름돈을 보내자
+	outputs = append(outputs, *NewTXOutput(amount, to)) //기록한다 얼마를 누구한테 줌
+	if acc > amount {                                   //거스름돈을 챙기자
+		outputs = append(outputs, *NewTXOutput(acc-amount, from)) //나한테 뺀 가격만큼 거스름돈을 보내자
 	}
 
 	tx := Transaction{nil, inputs, outputs} //새로운 트랜잭션을 생성하자 ! Input, Output을 넣고 거스름돈이라면 누구에게 9원 줌 기록
-	tx.SetID()
-
+	tx.ID = tx.Hash()
+	bc.SignTransaction(&tx, wallet.PrivateKey) //서명을 하고 TX를 만들자!
 	return &tx
 }
