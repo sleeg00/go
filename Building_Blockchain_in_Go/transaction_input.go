@@ -1,5 +1,6 @@
 package main
 
+/*
 type TXInput struct {
 	Ixid      []byte
 	Vout      int
@@ -25,6 +26,3 @@ type TXInput struct {
 		return bytes.Compare(lockingHash, pubKeyHash) == 0
 	}
 */
-func (in *TXInput) CanUnlockOutputWith(unlockingData string) bool {
-	return in.ScriptSig == unlockingData
-}

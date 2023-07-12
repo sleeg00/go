@@ -1,8 +1,13 @@
 package main
 
+/*
 type TXOutput struct {
 	Value        int
 	ScriptPubKey string
+}
+
+func (out *TXOutput) CanBeUnlockedWith(unlockingData string) bool {
+	return out.ScriptPubKey == unlockingData
 }
 
 /*
@@ -57,6 +62,3 @@ func DeserializeOutputs(data []byte) TXOutputs { //역직렬화 배열 아님 Ke
 		return buff.Bytes()
 	}
 */
-func (out *TXOutput) CanBeUnlockedWith(unlockingData string) bool {
-	return out.ScriptPubKey == unlockingData
-}

@@ -1,5 +1,6 @@
 package main
 
+/*
 import (
 	"log"
 
@@ -31,3 +32,4 @@ func (i *BlockchainIterator) Next() *Block {
 	i.currentHash = block.PrevBlockHash //이전 블럭 Hash가져옴 => 반복문이라고 볼 수 있다.
 	return block
 }
+*/

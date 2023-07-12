@@ -1,13 +1,9 @@
-package main
+/*package main
 
 import (
 	"bytes"
-	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/sha256"
 	"encoding/gob"
-	"encoding/hex"
-	"math/big"
 
 	"fmt"
 	"log"
@@ -20,9 +16,7 @@ type Transaction struct {
 	ID   []byte
 	Vin  []TXInput
 	Vout []TXOutput
-}
-
-/*
+} /*
 // Coinbase 즉 GenessisBlock인지 아닌지 판명
 
 	func (tx Transaction) IsCoinbase() bool {
@@ -117,35 +111,8 @@ func NewCoinbaseTX(to, data string) *Transaction { //누구에게, Data를 받�
 	}
 
 // DeserializeTransaction deserializes a transaction
-*/
-func (tx Transaction) SetID() {
-	var encoded bytes.Buffer
-	var hash [32]byte
 
-	enc := gob.NewEncoder(&encoded)
-	err := enc.Encode(tx)
-	if err != nil {
-		log.Panic(err)
-	}
-	hash = sha256.Sum256(encoded.Bytes())
 
-	tx.ID = hash[:]
-}
-
-// GetHash hashes the transaction and returns the hash
-func (tx Transaction) GetHash() []byte {
-	var encoded bytes.Buffer
-	var hash [32]byte
-
-	enc := gob.NewEncoder(&encoded)
-	err := enc.Encode(tx)
-	if err != nil {
-		log.Panic(err)
-	}
-	hash = sha256.Sum256(encoded.Bytes())
-
-	return hash[:]
-}
 func NewCoinbaseTX(to, data string) *Transaction {
 	if data == "" {
 		data = fmt.Sprintf("Reward to '%s'", to)
@@ -168,64 +135,117 @@ func DeserializeTransaction(data []byte) Transaction {
 	return transaction
 }
 
+*/
 // Verify verifies signatures of Transaction inputs
-func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
-	if tx.IsCoinbase() {
-		return true
-	}
 
-	for _, vin := range tx.Vin {
-		if prevTXs[hex.EncodeToString(vin.Txid)].ID == nil {
-			log.Panic("ERROR: Previous transaction is not correct")
-		}
-	}
+package main
 
-	txCopy := tx.TrimmedCopy()
-	curve := elliptic.P256()
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/gob"
+	"encoding/hex"
+	"fmt"
+	"log"
+)
 
-	for inID, vin := range tx.Vin {
-		prevTx := prevTXs[hex.EncodeToString(vin.Txid)]
-		txCopy.Vin[inID].Signature = nil
-		txCopy.Vin[inID].PubKey = prevTx.Vout[vin.Vout].PubKeyHash
+const subsidy = 10
 
-		r := big.Int{}
-		s := big.Int{}
-		sigLen := len(vin.Signature)
-		r.SetBytes(vin.Signature[:(sigLen / 2)])
-		s.SetBytes(vin.Signature[(sigLen / 2):])
-
-		x := big.Int{}
-		y := big.Int{}
-		keyLen := len(vin.PubKey)
-		x.SetBytes(vin.PubKey[:(keyLen / 2)])
-		y.SetBytes(vin.PubKey[(keyLen / 2):])
-
-		dataToVerify := fmt.Sprintf("%x\n", txCopy)
-
-		rawPubKey := ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}
-		if ecdsa.Verify(&rawPubKey, []byte(dataToVerify), &r, &s) == false {
-			return false
-		}
-		txCopy.Vin[inID].PubKey = nil
-	}
-
-	return true
+// Transaction represents a Bitcoin transaction
+type Transaction struct {
+	ID   []byte
+	Vin  []TXInput
+	Vout []TXOutput
 }
 
-// TrimmedCopy creates a trimmed copy of Transaction to be used in signing
-func (tx *Transaction) TrimmedCopy() Transaction {
+// IsCoinbase checks whether the transaction is coinbase
+func (tx Transaction) IsCoinbase() bool {
+	return len(tx.Vin) == 1 && len(tx.Vin[0].Txid) == 0 && tx.Vin[0].Vout == -1
+}
+
+// SetID sets ID of a transaction
+func (tx Transaction) SetID() {
+	var encoded bytes.Buffer
+	var hash [32]byte
+
+	enc := gob.NewEncoder(&encoded)
+	err := enc.Encode(tx)
+	if err != nil {
+		log.Panic(err)
+	}
+	hash = sha256.Sum256(encoded.Bytes())
+	tx.ID = hash[:]
+}
+
+// TXInput represents a transaction input
+type TXInput struct {
+	Txid      []byte
+	Vout      int
+	ScriptSig string
+}
+
+// TXOutput represents a transaction output
+type TXOutput struct {
+	Value        int
+	ScriptPubKey string
+}
+
+// CanUnlockOutputWith checks whether the address initiated the transaction
+func (in *TXInput) CanUnlockOutputWith(unlockingData string) bool {
+	return in.ScriptSig == unlockingData
+}
+
+// CanBeUnlockedWith checks if the output can be unlocked with the provided data
+func (out *TXOutput) CanBeUnlockedWith(unlockingData string) bool {
+	return out.ScriptPubKey == unlockingData
+}
+
+// NewCoinbaseTX creates a new coinbase transaction
+func NewCoinbaseTX(to, data string) *Transaction { //시작 비트코인
+	if data == "" {
+		data = fmt.Sprintf("Reward to '%s'", to)
+	}
+
+	txin := TXInput{[]byte{}, -1, data}
+	txout := TXOutput{subsidy, to} //여기서 address => to 이다
+	tx := Transaction{nil, []TXInput{txin}, []TXOutput{txout}}
+	tx.SetID()
+
+	return &tx
+}
+
+// NewUTXOTransaction creates a new transaction
+func NewUTXOTransaction(from, to string, amount int, bc *Blockchain) *Transaction {
 	var inputs []TXInput
 	var outputs []TXOutput
 
-	for _, vin := range tx.Vin {
-		inputs = append(inputs, TXInput{vin.Txid, vin.Vout, nil, nil})
+	acc, validOutputs := bc.FindSpendableOutputs(from, amount) //사용할 UTXO값, UTXO덩어리들의 Idx가 왔다(Output_Idx)
+
+	if acc < amount { //돈이 충분치 않을 경우 error
+		log.Panic("ERROR: Not enough funds")
 	}
 
-	for _, vout := range tx.Vout {
-		outputs = append(outputs, TXOutput{vout.Value, vout.PubKeyHash})
+	// Build a list of inputs
+	for txid, outs := range validOutputs {
+		txID, err := hex.DecodeString(txid) //txid를 디코딩해서 가져오고
+		if err != nil {
+			log.Panic(err)
+		}
+
+		for _, out := range outs { //Output_IDX => UTXO의 IDX
+			input := TXInput{txID, out, from} //Input구조체에 기록한다 (어떤 TXID에게 받았고, 얼마를, 누구에게 받았는지)
+			inputs = append(inputs, input)    //배열에 저장
+		}
 	}
 
-	txCopy := Transaction{tx.ID, inputs, outputs}
+	// Build a list of outputs
+	outputs = append(outputs, TXOutput{amount, to}) //기록한다 얼마를 누구한테 줌
+	if acc > amount {                               //거스름돈을 챙기자
+		outputs = append(outputs, TXOutput{acc - amount, from}) //나한테 뺀 가격만큼 거스름돈을 보내자
+	}
 
-	return txCopy
+	tx := Transaction{nil, inputs, outputs} //새로운 트랜잭션을 생성하자 ! Input, Output을 넣고
+	tx.SetID()
+
+	return &tx
 }
