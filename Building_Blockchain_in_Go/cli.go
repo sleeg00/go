@@ -4,12 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"log"
-
 	"os"
+	"strconv"
 )
-
-// CLI responsible for processing command line arguments
-type CLI struct{}
 
 func (cli *CLI) printUsage() {
 	fmt.Println("Usage:")
@@ -23,50 +20,75 @@ func (cli *CLI) printUsage() {
 	fmt.Println("  startnode -miner ADDRESS - Start a node with ID specified in NODE_ID env. var. -miner enables mining")
 }
 
+type CLI struct {
+	bc *Blockchain
+}
+
+func (cli *CLI) addBlock(data string) {
+	cli.bc.AddBlock(data)
+	fmt.Println("Success!")
+}
 func (cli *CLI) validateArgs() {
 	if len(os.Args) < 2 {
 		cli.printUsage()
 		os.Exit(1)
 	}
 }
+func (cli *CLI) printChain() {
+	bci := cli.bc.Iterator()
 
-// Run parses command line arguments and processes commands
+	for {
+		block := bci.Next()
+		fmt.Printf("Prev. hash: %x\n", block.PrevBlockHash)
+		fmt.Printf("Data: %s\n", block.Data)
+		fmt.Printf("Hash: %x\n", block.Hash)
+
+		pow := NewProofOfWork(block)
+		fmt.Printf("PoW: %s\n", strconv.FormatBool(pow.Validate()))
+		fmt.Println()
+
+		if len(block.PrevBlockHash) == 0 {
+			break
+		}
+	}
+}
+func (cli *CLI) getBalance(address, nodeID string) {
+	if !ValidateAddress(address) {
+		log.Panic("ERROR: Address is not valid")
+	}
+	bc := NewBlockchain(nodeID)
+	UTXOSet := UTXOSet{bc}
+	defer bc.db.Close()
+
+	balance := 0
+	pubKeyHash := Base58Decode([]byte(address))
+	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-4]
+	UTXOs := UTXOSet.FindUTXO(pubKeyHash)
+
+	for _, out := range UTXOs {
+		balance += out.Value
+	}
+
+	fmt.Printf("Balance of '%s': %d\n", address, balance)
+}
+func (cli *CLI) send(from, to string, amount int) {
+	bc := NewBlockchain(from)
+	defer bc.db.Close()
+
+	tx := NewUTXOTransaction(from, to, amount, bc)
+	bc.MineBlock([]*Transaction{tx})
+	fmt.Println("Success!")
+}
 func (cli *CLI) Run() {
 	cli.validateArgs()
 
-	nodeID := os.Getenv("NODE_ID")
-	if nodeID == "" {
-		fmt.Printf("NODE_ID env. var is not set!")
-		os.Exit(1)
-	}
-
-	getBalanceCmd := flag.NewFlagSet("getbalance", flag.ExitOnError)
-	createBlockchainCmd := flag.NewFlagSet("createblockchain", flag.ExitOnError)
-	createWalletCmd := flag.NewFlagSet("createwallet", flag.ExitOnError)
-	listAddressesCmd := flag.NewFlagSet("listaddresses", flag.ExitOnError)
+	addBlockCmd := flag.NewFlagSet("addblock", flag.ExitOnError)
 	printChainCmd := flag.NewFlagSet("printchain", flag.ExitOnError)
-	reindexUTXOCmd := flag.NewFlagSet("reindexutxo", flag.ExitOnError)
-	sendCmd := flag.NewFlagSet("send", flag.ExitOnError)
-	startNodeCmd := flag.NewFlagSet("startnode", flag.ExitOnError)
+	addBlockData := addBlockCmd.String("data", "", "Block data")
 
 	switch os.Args[1] {
-	case "getbalance":
-		err := getBalanceCmd.Parse(os.Args[2:])
-		if err != nil {
-			log.Panic(err)
-		}
-	case "createblockchain":
-		err := createBlockchainCmd.Parse(os.Args[2:])
-		if err != nil {
-			log.Panic(err)
-		}
-	case "createwallet":
-		err := createWalletCmd.Parse(os.Args[2:])
-		if err != nil {
-			log.Panic(err)
-		}
-	case "listaddresses":
-		err := listAddressesCmd.Parse(os.Args[2:])
+	case "addblock":
+		err := addBlockCmd.Parse(os.Args[2:])
 		if err != nil {
 			log.Panic(err)
 		}
@@ -75,24 +97,21 @@ func (cli *CLI) Run() {
 		if err != nil {
 			log.Panic(err)
 		}
-	case "reindexutxo":
-		err := reindexUTXOCmd.Parse(os.Args[2:])
-		if err != nil {
-			log.Panic(err)
-		}
-	case "send":
-		err := sendCmd.Parse(os.Args[2:])
-		if err != nil {
-			log.Panic(err)
-		}
-	case "startnode":
-		err := startNodeCmd.Parse(os.Args[2:])
-		if err != nil {
-			log.Panic(err)
-		}
 	default:
+
 		cli.printUsage()
 		os.Exit(1)
 	}
 
+	if addBlockCmd.Parsed() {
+		if *addBlockData == "" {
+			addBlockCmd.Usage()
+			os.Exit(1)
+		}
+		cli.addBlock(*addBlockData)
+	}
+
+	if printChainCmd.Parsed() {
+		cli.printChain()
+	}
 }
