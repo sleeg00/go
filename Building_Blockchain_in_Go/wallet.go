@@ -19,6 +19,7 @@ const addressChecksumLen = 4
 type Wallet struct {
 	PrivateKey ecdsa.PrivateKey //비밀 키
 	PublicKey  []byte           //공개 키
+
 }
 
 // 새로운 지갑에 키쌍을 생성

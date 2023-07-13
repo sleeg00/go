@@ -16,8 +16,8 @@ type Wallets struct {
 }
 
 func NewWallets() (*Wallets, error) {
-	wallets := Wallets{}
-	wallets.Wallets = make(map[string]*Wallet)
+	wallets := Wallets{}                       //Walltes 구조체 생성
+	wallets.Wallets = make(map[string]*Wallet) //Wallets필드에 make구조체 생성
 
 	err := wallets.LoadFromFile() //지갑정보를 가져온다
 
@@ -26,6 +26,9 @@ func NewWallets() (*Wallets, error) {
 
 // 지갑 주소 반환 (공개 키 해싱 값 )
 func (ws *Wallets) CreateWallet() string {
+	if ws.Wallets == nil {
+		ws.Wallets = make(map[string]*Wallet) // 맵 초기화
+	}
 	wallet := NewWallet()                             //지갑을 만들고 map[String][공개 키 - 비킬 키]로 이루어진
 	address := fmt.Sprintf("%s", wallet.GetAddress()) //주소 출력
 
@@ -47,24 +50,30 @@ func (ws *Wallets) GetAddresses() []string {
 
 // GetWallet returns a Wallet by its address
 func (ws Wallets) GetWallet(address string) Wallet {
+
 	return *ws.Wallets[address]
 }
 
-// 지갑 정보를 찾고 디코딩해서 반환
 func (ws *Wallets) LoadFromFile() error {
-	if _, err := os.Stat(walletFile); os.IsNotExist(err) { // 지갑 없으면 에러
+	if _, err := os.Stat(walletFile); os.IsNotExist(err) {
 		return err
 	}
 
-	fileContent, err := ioutil.ReadFile(walletFile) //지갑 읽기
+	fileContent, err := ioutil.ReadFile(walletFile)
 	if err != nil {
 		log.Panic(err)
 	}
 
+	if len(fileContent) == 0 {
+		// 파일이 비어있는 경우, Wallets를 초기화합니다.
+		ws.Wallets = make(map[string]*Wallet)
+		return nil
+	}
+
 	var wallets Wallets
 	gob.Register(elliptic.P256())
-	decoder := gob.NewDecoder(bytes.NewReader(fileContent)) //디코딩
-	err = decoder.Decode(&wallets)                          //디코딩
+	decoder := gob.NewDecoder(bytes.NewReader(fileContent))
+	err = decoder.Decode(&wallets)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -74,7 +83,7 @@ func (ws *Wallets) LoadFromFile() error {
 	return nil
 }
 
-// 지갑을 디코딩해서 저장한다
+// SaveToFile saves wallets to a file
 func (ws Wallets) SaveToFile() {
 	var content bytes.Buffer
 
@@ -91,3 +100,6 @@ func (ws Wallets) SaveToFile() {
 		log.Panic(err)
 	}
 }
+
+//1FPBR8iLSM3wm1mwfZsMuoMY8D5myJRVsZ
+//15sdgcZXS8EKER1TJT5FUjT51bwdvEJ5vN
