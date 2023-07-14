@@ -186,7 +186,7 @@ func NewCoinbaseTX(to, data string) *Transaction {
 
 // Input, Output , TX기록 TX반납
 // + part 5 서명까지한 TX를 반납한다~
-func NewUTXOTransaction(from, to string, amount int, bc *Blockchain) *Transaction {
+func NewUTXOTransaction(from, to string, amount int, UTXOSet *UTXOSet) *Transaction {
 	var inputs []TXInput
 	var outputs []TXOutput
 	wallets, err := NewWallets() //지갑들 생성
@@ -196,7 +196,7 @@ func NewUTXOTransaction(from, to string, amount int, bc *Blockchain) *Transactio
 	wallet := wallets.GetWallet(from)          //주소의 지갑을 가져온다
 	pubKeyHash := HashPubKey(wallet.PublicKey) //공개 키 가져온다 (주소라도 봐도 무방 )
 
-	acc, validOutputs := bc.FindSpendableOutputs(pubKeyHash, amount) //공개키의 UTXO를 가져온다 => 주소의 UTXO를 가져온다.
+	acc, validOutputs := UTXOSet.FindSpendableOutputs(pubKeyHash, amount) //공개키의 UTXO를 가져온다 => 주소의 UTXO를 가져온다.
 	//사용할 UTXO값, UTXO덩어리들의 Idx가 왔다(Output_Idx)
 	//반환값은 사용할 acc UTXO값과 사용할 validOutputs={1, 3, 5} 1, 3, 5 UTXO덩어리들의 Idx즉 인덱스다(Outputs의)
 
@@ -225,6 +225,19 @@ func NewUTXOTransaction(from, to string, amount int, bc *Blockchain) *Transactio
 
 	tx := Transaction{nil, inputs, outputs} //새로운 트랜잭션을 생성하자 ! Input, Output을 넣고 거스름돈이라면 누구에게 9원 줌 기록
 	tx.ID = tx.Hash()
-	bc.SignTransaction(&tx, wallet.PrivateKey) //서명을 하고 TX를 만들자!
+	UTXOSet.Blockchain.SignTransaction(&tx, wallet.PrivateKey) //서명을 하고 TX를 만들자!
 	return &tx
+}
+
+// DeserializeTransaction deserializes a transaction
+func DeserializeTransaction(data []byte) Transaction {
+	var transaction Transaction
+
+	decoder := gob.NewDecoder(bytes.NewReader(data))
+	err := decoder.Decode(&transaction)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	return transaction
 }

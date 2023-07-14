@@ -54,6 +54,7 @@ func (ws Wallets) GetWallet(address string) Wallet {
 	return *ws.Wallets[address]
 }
 
+// 지갑을 읽어옴
 func (ws *Wallets) LoadFromFile() error {
 	if _, err := os.Stat(walletFile); os.IsNotExist(err) {
 		return err
@@ -83,7 +84,7 @@ func (ws *Wallets) LoadFromFile() error {
 	return nil
 }
 
-// SaveToFile saves wallets to a file
+// 지갑을 저장
 func (ws Wallets) SaveToFile() {
 	var content bytes.Buffer
 
