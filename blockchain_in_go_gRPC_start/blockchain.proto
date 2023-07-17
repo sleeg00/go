@@ -167,5 +167,6 @@ service BlockchainService {
   rpc ReindexUTXO(ReindexUTXORequest) returns (ReindexUTXOResponse) {}
   rpc Send(SendRequest) returns (SendResponse) {}
   rpc SendTx(SendTxRequest) returns (SendTxResponse);
+  rpc Version(VersionRequest) returns (VersionResponse);
   rpc DeleteTxInMempool(DeleteTxInMempoolRequest) returns (DeleteTxInMempoolResponse);
 }

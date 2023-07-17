@@ -153,7 +153,7 @@ func (cli *CLI) Run() {
 	}
 }
 func main() {
-	nodeID := "3000"
+	nodeID := "3001"
 	if nodeID == "" {
 		fmt.Printf("NODE_ID env. var is not set!")
 		os.Exit(1)

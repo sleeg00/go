@@ -1,13 +1,10 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"log"
-
-	blockchain "github.com/sleeg00/blockchain_go/proto"
 )
 
+/*
 func (cli *CLI) createWallet(nodeID string) {
 	request := &blockchain.CreateWalletRequest{
 		NodeId: nodeID,
@@ -30,8 +27,8 @@ func (cli *CLI) createWallet(nodeID string) {
 		fmt.Println("failed : Not Fount Address?")
 	}
 }
+*/
 
-/*
 func (cli *CLI) createWallet(nodeID string) {
 	wallets, _ := NewWallets(nodeID)
 	address := wallets.CreateWallet()
@@ -39,4 +36,3 @@ func (cli *CLI) createWallet(nodeID string) {
 
 	fmt.Printf("Your new address: %s\n", address)
 }
-*/

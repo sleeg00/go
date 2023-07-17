@@ -14,6 +14,7 @@ import (
 	"github.com/sleeg00/blockchain_go/proto"
 	blockchain "github.com/sleeg00/blockchain_go/proto"
 	"google.golang.org/grpc"
+	"honnef.co/go/tools/knowledge"
 )
 
 const protocol = "tcp"
@@ -421,8 +422,10 @@ func StartServer2(nodeID, minerAddress string) {
 	if err != nil {
 		log.Panic(err)
 	}
-	bc := NewBlockchain(nodeID) // 풀 노드 가져옴
-	if nodeAddress != knownNodes[0] {
+	bc := NewBlockchain("3000") // 풀 노드 가져옴
+	//여기서 보내고 가져와야함 위에 bc는 그냥 일단 해둠
+	for _, node :=  range knownNodes {}
+		request := 
 		sendVersion(knownNodes[0], bc)
 	}
 	blockchainService := &server{}
