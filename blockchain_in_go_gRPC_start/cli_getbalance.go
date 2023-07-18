@@ -13,7 +13,7 @@ func (cli *CLI) getBalance(address, nodeID string) {
 	UTXOSet := UTXOSet{bc}
 	defer bc.db.Close()
 
-	balance := 0
+	var balance int64 = 0
 	pubKeyHash := Base58Decode([]byte(address))
 	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-4]
 	UTXOs := UTXOSet.FindUTXO(pubKeyHash)

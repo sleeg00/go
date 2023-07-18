@@ -30,7 +30,7 @@ func NewProofOfWork(b *Block) *ProofOfWork {
 	return pow
 }
 
-func (pow *ProofOfWork) prepareData(nonce int) []byte {
+func (pow *ProofOfWork) prepareData(nonce int64) []byte {
 	data := bytes.Join(
 		[][]byte{
 			pow.block.PrevBlockHash,
@@ -46,14 +46,14 @@ func (pow *ProofOfWork) prepareData(nonce int) []byte {
 }
 
 // Run performs a proof-of-work
-func (pow *ProofOfWork) Run() (int, []byte) {
+func (pow *ProofOfWork) Run() (int64, []byte) {
 	var hashInt big.Int
 	var hash [32]byte
 	nonce := 0
 
 	fmt.Printf("Mining a new block")
 	for nonce < maxNonce {
-		data := pow.prepareData(nonce)
+		data := pow.prepareData(int64(nonce))
 
 		hash = sha256.Sum256(data)
 		if math.Remainder(float64(nonce), 100000) == 0 {
@@ -69,7 +69,7 @@ func (pow *ProofOfWork) Run() (int, []byte) {
 	}
 	fmt.Print("\n\n")
 
-	return nonce, hash[:]
+	return int64(nonce), hash[:]
 }
 
 // Validate validates block's PoW

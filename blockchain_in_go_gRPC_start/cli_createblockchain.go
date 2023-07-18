@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+
+	blockchain "github.com/sleeg00/blockchain_go/proto"
 )
 
-/*
 func (cli *CLI) createBlockchain(address, nodeID string) {
 	request := &blockchain.CreateBlockchainRequest{
 		Address: address,
@@ -23,8 +25,8 @@ func (cli *CLI) createBlockchain(address, nodeID string) {
 		fmt.Println("failed.")
 	}
 }
-*/
 
+/*
 func (cli *CLI) createBlockchain(address, nodeID string) {
 	if !ValidateAddress(address) {
 		log.Panic("ERROR: Address is not valid")
@@ -37,3 +39,4 @@ func (cli *CLI) createBlockchain(address, nodeID string) {
 
 	fmt.Println("Done!")
 }
+*/

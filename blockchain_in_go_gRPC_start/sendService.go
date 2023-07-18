@@ -21,23 +21,24 @@ func sendTxToNode(address string, tnx *Transaction) string {
 	request := append(commandToBytes("tx"), payload...)
 
 	// 서버와의 연결 설정
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	conn, err := grpc.Dial("localhost:"+address, grpc.WithInsecure())
 	if err != nil {
-		log.Fatalf("Failed to dial node %s: %v", address, err)
+		log.Fatalf("Failed to dial node %s: %v", "localhost:"+address, err)
 	}
 	defer conn.Close()
 
 	// 클라이언트 생성
 	client := proto.NewBlockchainServiceClient(conn)
 
-	req := &blockchain.SendTxRequest{
+	req := &blockchain.SendTxRequest{ //모든 노드들한테
 		Address: address,
 		Payload: request, // 직렬화된 데이터를 Payload 필드에 직접 할당
 	}
 
-	response, err := client.SendTx(context.Background(), req)
+	response, err := client.SendTx(context.Background(), req) //여기서 에러가 나는데
 	if err != nil {
 		log.Fatalf("Failed to send transaction to node %s: %v", address, err)
+
 	}
 	if len(response.Response) > 0 {
 	} else {

@@ -6,15 +6,13 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"log"
 	"net"
 
+	"github.com/boltdb/bolt"
 	"github.com/sleeg00/blockchain_go/proto"
 	blockchain "github.com/sleeg00/blockchain_go/proto"
 	"google.golang.org/grpc"
-	"honnef.co/go/tools/knowledge"
 )
 
 const protocol = "tcp"
@@ -23,7 +21,7 @@ const commandLength = 12
 
 var nodeAddress string
 var miningAddress string
-var knownNodes = []string{"localhost:3000"}
+var knownNodes = []string{"3000"}
 var blocksInTransit = [][]byte{}
 var mempool = make(map[string]Transaction)
 
@@ -58,7 +56,7 @@ type inv struct {
 
 type verzion struct {
 	Version    int
-	BestHeight int
+	BestHeight int64
 	AddrFrom   string
 }
 
@@ -88,354 +86,45 @@ func extractCommand(request []byte) []byte {
 	return request[:commandLength]
 }
 
-func requestBlocks() {
-	for _, node := range knownNodes {
-		sendGetBlocks(node)
-	}
-}
+// StartServer starts a node
 
-func sendAddr(address string) {
-	nodes := addr{knownNodes}
-	nodes.AddrList = append(nodes.AddrList, nodeAddress)
-	payload := gobEncode(nodes)
-	request := append(commandToBytes("addr"), payload...)
-
-	sendData(address, request)
-}
-
-func sendBlock(addr string, b *Block) {
-	data := block{nodeAddress, b.Serialize()}
-	payload := gobEncode(data)
-	request := append(commandToBytes("block"), payload...)
-
-	sendData(addr, request)
-}
-
-func sendData(addr string, data []byte) {
-	conn, err := net.Dial(protocol, addr)
-	if err != nil {
-		fmt.Printf("%s is not available\n", addr)
-		var updatedNodes []string
-
-		for _, node := range knownNodes {
-			if node != addr {
-				updatedNodes = append(updatedNodes, node)
-			}
-		}
-
-		knownNodes = updatedNodes
-
-		return
-	}
-	defer conn.Close()
-
-	_, err = io.Copy(conn, bytes.NewReader(data))
-	if err != nil {
-		log.Panic(err)
-	}
-}
-
-func sendInv(address, kind string, items [][]byte) {
-	inventory := inv{nodeAddress, kind, items}
-	payload := gobEncode(inventory)
-	request := append(commandToBytes("inv"), payload...)
-
-	sendData(address, request)
-}
-
-func sendGetBlocks(address string) {
-	payload := gobEncode(getblocks{nodeAddress})
-	request := append(commandToBytes("getblocks"), payload...)
-
-	sendData(address, request)
-}
-
-func sendGetData(address, kind string, id []byte) {
-	payload := gobEncode(getdata{nodeAddress, kind, id})
-	request := append(commandToBytes("getdata"), payload...)
-
-	sendData(address, request)
-}
-
-func sendVersion(addr string, bc *Blockchain) {
-	bestHeight := bc.GetBestHeight()
-	payload := gobEncode(verzion{nodeVersion, bestHeight, nodeAddress})
-
-	request := append(commandToBytes("version"), payload...)
-
-	sendData(addr, request)
-}
-
-func handleAddr(request []byte) {
-	var buff bytes.Buffer
-	var payload addr
-
-	buff.Write(request[commandLength:])
-	dec := gob.NewDecoder(&buff)
-	err := dec.Decode(&payload)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	knownNodes = append(knownNodes, payload.AddrList...)
-	fmt.Printf("There are %d known nodes now!\n", len(knownNodes))
-	requestBlocks()
-}
-
-func handleBlock(request []byte, bc *Blockchain) {
-	var buff bytes.Buffer
-	var payload block
-
-	buff.Write(request[commandLength:])
-	dec := gob.NewDecoder(&buff)
-	err := dec.Decode(&payload)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	blockData := payload.Block
-	block := DeserializeBlock(blockData)
-
-	fmt.Println("Recevied a new block!")
-	bc.AddBlock(block)
-
-	fmt.Printf("Added block %x\n", block.Hash)
-
-	if len(blocksInTransit) > 0 {
-		blockHash := blocksInTransit[0]
-		sendGetData(payload.AddrFrom, "block", blockHash)
-
-		blocksInTransit = blocksInTransit[1:]
-	} else {
-		UTXOSet := UTXOSet{bc}
-		UTXOSet.Reindex()
-	}
-}
-
-func handleInv(request []byte, bc *Blockchain) {
-	var buff bytes.Buffer
-	var payload inv
-
-	buff.Write(request[commandLength:])
-	dec := gob.NewDecoder(&buff)
-	err := dec.Decode(&payload)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	fmt.Printf("Recevied inventory with %d %s\n", len(payload.Items), payload.Type)
-
-	if payload.Type == "block" {
-		blocksInTransit = payload.Items
-
-		blockHash := payload.Items[0]
-		sendGetData(payload.AddrFrom, "block", blockHash)
-
-		newInTransit := [][]byte{}
-		for _, b := range blocksInTransit {
-			if bytes.Compare(b, blockHash) != 0 {
-				newInTransit = append(newInTransit, b)
-			}
-		}
-		blocksInTransit = newInTransit
-	}
-
-	if payload.Type == "tx" {
-		txID := payload.Items[0]
-
-		if mempool[hex.EncodeToString(txID)].ID == nil {
-			sendGetData(payload.AddrFrom, "tx", txID)
-		}
-	}
-}
-
-func handleGetBlocks(request []byte, bc *Blockchain) {
-	var buff bytes.Buffer
-	var payload getblocks
-
-	buff.Write(request[commandLength:])
-	dec := gob.NewDecoder(&buff)
-	err := dec.Decode(&payload)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	blocks := bc.GetBlockHashes()
-	sendInv(payload.AddrFrom, "block", blocks)
-}
-
-func handleGetData(request []byte, bc *Blockchain) {
-	var buff bytes.Buffer
-	var payload getdata
-
-	buff.Write(request[commandLength:])
-	dec := gob.NewDecoder(&buff)
-	err := dec.Decode(&payload)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	if payload.Type == "block" {
-		block, err := bc.GetBlock([]byte(payload.ID))
-		if err != nil {
-			return
-		}
-
-		sendBlock(payload.AddrFrom, &block)
-	}
-
-	if payload.Type == "tx" {
-		txID := hex.EncodeToString(payload.ID)
-		tx := mempool[txID]
-		log.Println(tx)
-		//sendTx(payload.AddrFrom, &tx)
-		// delete(mempool, txID)
-	}
-}
-
-func handleTx(request []byte, bc *Blockchain) {
-	var buff bytes.Buffer
-	var payload tx
-
-	buff.Write(request[commandLength:])
-	dec := gob.NewDecoder(&buff)
-	err := dec.Decode(&payload)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	txData := payload.Transaction
-	tx := DeserializeTransaction(txData)
-	mempool[hex.EncodeToString(tx.ID)] = tx
-
-	if nodeAddress == knownNodes[0] {
-		for _, node := range knownNodes {
-			if node != nodeAddress && node != payload.AddFrom {
-				sendInv(node, "tx", [][]byte{tx.ID})
-			}
-		}
-	} else {
-		if len(mempool) >= 2 && len(miningAddress) > 0 {
-		MineTransactions:
-			var txs []*Transaction
-
-			for id := range mempool {
-				tx := mempool[id]
-				if bc.VerifyTransaction(&tx) {
-					txs = append(txs, &tx)
-				}
-			}
-
-			if len(txs) == 0 {
-				fmt.Println("All transactions are invalid! Waiting for new ones...")
-				return
-			}
-
-			cbTx := NewCoinbaseTX(miningAddress, "")
-			txs = append(txs, cbTx)
-
-			newBlock := bc.MineBlock(txs)
-			UTXOSet := UTXOSet{bc}
-			UTXOSet.Reindex()
-
-			fmt.Println("New block is mined!")
-
-			for _, tx := range txs {
-				txID := hex.EncodeToString(tx.ID)
-				delete(mempool, txID)
-			}
-
-			for _, node := range knownNodes {
-				if node != nodeAddress {
-					sendInv(node, "block", [][]byte{newBlock.Hash})
-				}
-			}
-
-			if len(mempool) > 0 {
-				goto MineTransactions
-			}
-		}
-	}
-}
-
-func handleVersion(request []byte, bc *Blockchain) {
+func (s *server) Version(ctx context.Context, req *proto.VersionRequest) (*proto.VersionResponse, error) {
 	var buff bytes.Buffer
 	var payload verzion
 
-	buff.Write(request[commandLength:])
+	buff.Write(req.Payload[commandLength:])
 	dec := gob.NewDecoder(&buff)
 	err := dec.Decode(&payload)
 	if err != nil {
 		log.Panic(err)
 	}
+	bc, err := GetBlockchain(req.Address)
 
 	myBestHeight := bc.GetBestHeight()
-	foreignerBestHeight := payload.BestHeight
 
-	if myBestHeight < foreignerBestHeight {
-		sendGetBlocks(payload.AddrFrom)
-	} else if myBestHeight > foreignerBestHeight {
-		sendVersion(payload.AddrFrom, bc)
-	}
-
-	sendAddr(payload.AddrFrom)
-	if !nodeIsKnown(payload.AddrFrom) {
-		knownNodes = append(knownNodes, payload.AddrFrom)
-	}
+	return &proto.VersionResponse{
+		NodeId: req.Address,
+		Height: int32(myBestHeight),
+	}, nil
 }
-
-func handleConnection(conn net.Conn, bc *Blockchain) {
-	request, err := ioutil.ReadAll(conn)
-	if err != nil {
-		log.Panic(err)
-	}
-	command := bytesToCommand(request[:commandLength])
-	fmt.Printf("Received %s command\n", command)
-
-	switch command {
-	case "addr":
-		handleAddr(request)
-	case "block":
-		handleBlock(request, bc)
-	case "inv":
-		handleInv(request, bc)
-	case "getblocks":
-		handleGetBlocks(request, bc)
-	case "getdata":
-		handleGetData(request, bc)
-	case "tx":
-		handleTx(request, bc)
-	case "version":
-		handleVersion(request, bc)
-	default:
-		fmt.Println("Unknown command!")
-	}
-
-	conn.Close()
-}
-
-// StartServer starts a node
 
 func StartServer2(nodeID, minerAddress string) {
+	LocalNode := "localhost:" + nodeID
 	srv := grpc.NewServer()
-	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%s", nodeID))
+	lis, err := net.Listen("tcp", fmt.Sprintf(LocalNode))
 	if err != nil {
-		log.Panic(err)
-	}
-	bc := NewBlockchain("3000") // 풀 노드 가져옴
-	//여기서 보내고 가져와야함 위에 bc는 그냥 일단 해둠
-	for _, node :=  range knownNodes {}
-		request := 
-		sendVersion(knownNodes[0], bc)
+		log.Fatalf("서버 연결 안됨")
 	}
 	blockchainService := &server{}
 	blockchain.RegisterBlockchainServiceServer(srv, blockchainService)
 
-	log.Println(fmt.Sprintf("Server listening on localhost:%s", nodeID))
+	log.Println("Server listening on localhost:", nodeID)
 
 	srv.Serve(lis)
+
 }
 
+// mempool에서 TXID지움
 func (s *server) DeleteTxInMempool(ctx context.Context, req *proto.DeleteTxInMempoolRequest) (*proto.DeleteTxInMempoolResponse, error) {
 	delete(mempool, req.TxId)
 	return &proto.DeleteTxInMempoolResponse{}, nil
@@ -455,9 +144,13 @@ func (s *server) CreateBlockchain(ctx context.Context, req *proto.CreateBlockcha
 	}, nil
 }
 func (s *server) CreateWallet(ctx context.Context, req *proto.CreateWalletRequest) (*proto.CreateWalletResponse, error) {
+	log.Println("!@#@")
 	wallets, _ := NewWallets(req.NodeId)
+	log.Println("!")
 	address := wallets.CreateWallet()
+	log.Println("2")
 	wallets.SaveToFile(req.NodeId)
+	log.Println("3")
 
 	fmt.Printf("Your new address: %s\n", address)
 	return &proto.CreateWalletResponse{
@@ -481,6 +174,7 @@ func (s *server) PrintChain(ctx context.Context, req *proto.PrintChainRequest) (
 	return nil, nil
 }
 func (s *server) Send(ctx context.Context, req *proto.SendRequest) (*proto.SendResponse, error) {
+
 	if !ValidateAddress(req.From) {
 		log.Panic("ERROR: Sender address is not valid")
 	}
@@ -489,35 +183,47 @@ func (s *server) Send(ctx context.Context, req *proto.SendRequest) (*proto.SendR
 	}
 
 	//지갑 정보를 확인한다 노드의 지갑이 존재하는지
-	wallets, err := NewWallets(req.NodeId)
+	wallets, err := NewWallets(req.NodeId) //wallet_NodeId가 존재하는지 확인
 	if err != nil {
 		log.Panic(err)
 	}
-	wallet := wallets.GetWallet(req.From)
+	wallet := wallets.GetWallet(req.From) //해당 address가 있는지 확인
 
 	//NodeID의 블록체인을 가져온다.
-	bc := NewBlockchain(req.NodeId)
-
+	bc, err := GetBlockchain(req.NodeId)
+	if err != nil {
+		log.Println("못 가져오네")
+	}
 	//블록체인 동기화 한 번 해주자 -> 할 필요 없다 Mempool에서 TX가 다 차고 블럭이 생성되는 순간 어자피 동기화를 하기 때문이고,
 	//Mempool이 다 안차있는데 블럭이 새로 생기는 경우가 없기 때문이다.
 	UTXOSet := UTXOSet{bc}
 	//UTXO를 찾아 있으면 TX생성해서 Output만듬 -> 여기서 서명도 했음
-	tx := NewUTXOTransaction(&wallet, req.To, int(req.Amount), &UTXOSet)
+	tx := NewUTXOTransaction(&wallet, req.To, int64(req.Amount), &UTXOSet)
 	//순서대로 from, to, amount, UTXOset이다.
 
 	//마이닝하고 있는 사람이 없으므로 바로 TX 전송과 동시에 마이닝한다.
 	//Genesis Block에서 마이닝한 사람들이기 때문에 Input, OUTPUT의 TX는 임의로 정해둔다
 	if req.MineNow {
+		log.Println("바로 마이닝합니다.")
 		cbTx := NewCoinbaseTX(req.From, "")
 		txs := []*Transaction{cbTx, tx}
 
 		newBlock := bc.MineBlock(txs)
+		for _, node := range knownNodes {
+			if node != req.NodeId {
+				AddBlockRequest(txs, node)
+			}
+		}
+		//newBlock을 전파하자 모든 노드에게
+
 		UTXOSet.Update(newBlock)
-	} else {
+		//여기서 모든 블럭이 생겼다고 알려줘야 한다. UTXO는 따로 DB가 존재
+	} else { //첫 번째 실패
 		//마이낭하고 있는 사람이 없다면 모든 노드에게 TX를 보내서 일관성을 유지하자.
 		for node := 0; node < len(knownNodes); node++ { //마이닝을 찾았다면 종료해야한다.
 			//굳이 클라이언트에 반환해서 하지 않는 이유는 일관성 유지, 병목현상 제거이다.
-
+			log.Println("node : ", knownNodes[node])
+			bc.db.Close()
 			if sendTxToNode(knownNodes[node], tx) == "error" {
 				break
 			}
@@ -528,9 +234,83 @@ func (s *server) Send(ctx context.Context, req *proto.SendRequest) (*proto.SendR
 	defer bc.db.Close()
 
 	fmt.Println("Success!")
-	return &proto.SendResponse{}, nil
+	return &proto.SendResponse{Response: "Success"}, nil
+}
+func (s *server) AddBlock(ctx context.Context, req *proto.AddBlockRequest) (*proto.AddBlockResponse, error) {
+	bc, err := GetBlockchain(req.NodeId)
+	var lastHash []byte
+	var lastHeight int64
+
+	err = bc.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(blocksBucket))
+		lastHash = b.Get([]byte("l"))
+
+		blockData := b.Get(lastHash)
+		block := DeserializeBlock(blockData)
+
+		lastHeight = block.Height
+
+		return nil
+	})
+	if err != nil {
+		log.Panic(err)
+	}
+
+	var transactions []*Transaction
+
+	for _, tx := range req.Transactions {
+		var vin []TXInput
+		for _, input := range tx.Vin {
+			vin = append(vin, TXInput{
+				Txid:      input.Txid,
+				Vout:      input.Vout,
+				Signature: input.Signature,
+				PubKey:    input.PubKey,
+			})
+		}
+
+		var vout []TXOutput
+		for _, output := range tx.Vout {
+			vout = append(vout, TXOutput{
+				Value:      output.Value,
+				PubKeyHash: output.PubKeyHash,
+			})
+		}
+
+		transactions = append(transactions, &Transaction{
+			ID:   tx.Id,
+			Vin:  vin,
+			Vout: vout,
+		})
+	}
+
+	newBlock := NewBlock(transactions, lastHash, lastHeight+1)
+
+	err = bc.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(blocksBucket))
+		err := b.Put(newBlock.Hash, newBlock.Serialize())
+		if err != nil {
+			log.Panic(err)
+		}
+
+		err = b.Put([]byte("l"), newBlock.Hash)
+		if err != nil {
+			log.Panic(err)
+		}
+
+		bc.tip = newBlock.Hash
+
+		return nil
+	})
+	if err != nil {
+		log.Panic(err)
+	}
+
+	return &proto.AddBlockResponse{}, nil
+
 }
 func (s *server) SendTx(ctx context.Context, req *proto.SendTxRequest) (*proto.SendTxResponse, error) {
+	log.Println("SendTx_gRPC_Server")
 	var buff bytes.Buffer
 	var payload tx
 
@@ -540,27 +320,30 @@ func (s *server) SendTx(ctx context.Context, req *proto.SendTxRequest) (*proto.S
 	if err != nil {
 		log.Panic(err)
 	}
-
+	log.Println("Payload를 읽었습니다 ")
 	txData := payload.Transaction
 	tx := DeserializeTransaction(txData)
 	mempool[hex.EncodeToString(tx.ID)] = tx // 서버의 mempool에 기입
 
-	bc := NewBlockchain(req.Address) //내 블록체인
-
+	bc, err := GetBlockchain(req.Address) //내 블록체인
+	if err != nil {
+		log.Println("블록체인 가져오기 실패")
+	}
+	log.Println("블록체인을 읽었습니다")
 	//모든 노드에게 요청을 보내고 있기 때문에 나의 노드에만 더하면 된다.
-
+	log.Println("mempool을 출력해봅니다.", mempool)
 	//어라? 마이닝하고 있는 사람이 있다면
 	if len(mempool) >= 2 && len(miningAddress) > 0 {
 	MineTransactions:
 		var txs []*Transaction
 
-		for id := range mempool {
+		for id := range mempool { //mempool에 있는 것 txs에 다 넣음.
 			tx := mempool[id]
 			if bc.VerifyTransaction(&tx) {
 				txs = append(txs, &tx)
 			}
 		}
-
+		log.Println("mempool을 출력해봅니다.", mempool)
 		if len(txs) == 0 {
 			fmt.Println("All transactions are invalid! Waiting for new ones...")
 
@@ -568,18 +351,20 @@ func (s *server) SendTx(ctx context.Context, req *proto.SendTxRequest) (*proto.S
 			cbTx := NewCoinbaseTX(miningAddress, "")
 			txs = append(txs, cbTx)
 
-			newBlock := bc.MineBlock(txs) //마이닝
+			newBlock := bc.MineBlock(txs) //마이닝 블럭 추가 동기화
 			UTXOSet := UTXOSet{bc}
 			UTXOSet.Reindex()
 			fmt.Println(newBlock)
 			fmt.Println("New block is mined!")
+			//블록 생성됨
 
 			for _, tx := range txs { //그동안 했던 것 지우고 -> 이것도 gRPC 호출 해야 함 서버마다
+				log.Println("그동안 추가했던 mempool을 지웁니다.")
 				txID := hex.EncodeToString(tx.ID)
 				for _, no := range knownNodes {
-					conn, err := grpc.Dial(no, grpc.WithInsecure())
+					conn, err := grpc.Dial("localhost:"+no, grpc.WithInsecure())
 					if err != nil {
-						log.Fatalf("Failed to dial node %s: %v", no, err)
+						log.Fatalf("Failed to dial node %s: %v", "localhost:"+no, err)
 					}
 					defer conn.Close()
 					client := proto.NewBlockchainServiceClient(conn)
@@ -594,12 +379,6 @@ func (s *server) SendTx(ctx context.Context, req *proto.SendTxRequest) (*proto.S
 				}
 			}
 			return &proto.SendTxResponse{}, nil
-			/*
-				//Mempool에서 TX를 다 지우고 블럭을 추가한다.
-				for _, node := range knownNodes {
-					sendInv(node, "block", [][]byte{newBlock.Hash})
-				}
-			*/
 
 			if len(mempool) > 0 {
 				goto MineTransactions
@@ -609,10 +388,6 @@ func (s *server) SendTx(ctx context.Context, req *proto.SendTxRequest) (*proto.S
 	return &proto.SendTxResponse{Response: "Pass"}, nil
 }
 
-func (s *server) Version(ctx context.Context, req *proto.VersionRequest) (*proto.VersionResponse, error) {
-
-	return &proto.VersionResponse{}, nil
-}
 func (s *server) Addr(ctx context.Context, req *proto.AddrRequest) (*proto.AddrResponse, error) {
 	return &proto.AddrResponse{}, nil
 }

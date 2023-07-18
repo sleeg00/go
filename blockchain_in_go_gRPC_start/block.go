@@ -13,18 +13,18 @@ type Block struct {
 	Transactions  []*Transaction
 	PrevBlockHash []byte
 	Hash          []byte
-	Nonce         int
-	Height        int
+	Nonce         int64
+	Height        int64
 }
 
 // NewBlock creates and returns Block
-func NewBlock(transactions []*Transaction, prevBlockHash []byte, height int) *Block {
+func NewBlock(transactions []*Transaction, prevBlockHash []byte, height int64) *Block {
 	block := &Block{time.Now().Unix(), transactions, prevBlockHash, []byte{}, 0, height}
 	pow := NewProofOfWork(block)
 	nonce, hash := pow.Run()
 
 	block.Hash = hash[:]
-	block.Nonce = nonce
+	block.Nonce = int64(nonce)
 
 	return block
 }

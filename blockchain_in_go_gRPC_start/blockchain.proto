@@ -15,11 +15,15 @@ message SendDataRequest {
 }
 
 message VersionRequest {
-  bytes payload = 1;
+  string address = 1;
+  bytes payload = 2;
   
 }
 
-message VersionResponse {}
+message VersionResponse {
+  string node_id = 1;
+  int32 height = 2;
+}
 
 message Addr {
   repeated string addr_list = 1;
@@ -157,6 +161,33 @@ message DeleteTxInMempoolResponse {
 
 }
 
+
+message AddBlockRequest {
+  repeated Transaction transactions = 1;
+  string node_id = 7;
+}
+message AddBlockResponse{
+
+}
+
+message Transaction {
+  bytes id = 1;
+  repeated TXInput vin = 2;
+  repeated TXOutput vout = 3;
+}
+
+message TXInput {
+  bytes txid = 1;
+  int64  vout = 2;
+  bytes signature = 3;
+  bytes pub_key = 4;
+}
+
+message TXOutput {
+  int64 value = 1;
+  bytes pub_key_hash = 2;
+}
+//Version 하는 과정ㅂ ㅗ기 
 //------------------------
 service BlockchainService {
   rpc PrintChain(PrintChainRequest) returns (PrintChainResponse) {}
@@ -167,6 +198,7 @@ service BlockchainService {
   rpc ReindexUTXO(ReindexUTXORequest) returns (ReindexUTXOResponse) {}
   rpc Send(SendRequest) returns (SendResponse) {}
   rpc SendTx(SendTxRequest) returns (SendTxResponse);
-  rpc Version(VersionRequest) returns (VersionResponse);
   rpc DeleteTxInMempool(DeleteTxInMempoolRequest) returns (DeleteTxInMempoolResponse);
+  rpc Version(VersionRequest) returns (VersionResponse);
+  rpc AddBlock(AddBlockRequest) returns (AddBlockResponse);
 }

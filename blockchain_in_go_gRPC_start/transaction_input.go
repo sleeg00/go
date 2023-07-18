@@ -5,7 +5,7 @@ import "bytes"
 // TXInput represents a transaction input
 type TXInput struct {
 	Txid      []byte
-	Vout      int
+	Vout      int64
 	Signature []byte
 	PubKey    []byte
 }
